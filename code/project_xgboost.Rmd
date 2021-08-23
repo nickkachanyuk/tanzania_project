@@ -1,0 +1,300 @@
+---
+title: "project model visualizations"
+author: "Nick Kachanyuk"
+date: "7/31/2021"
+output: html_document
+---
+
+# Original model 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F)
+```
+
+```{r}
+library(xgboost)
+library(caret)
+library(dplyr)
+library(DiagrammeR)
+library(tidyverse)
+```
+
+# Original model
+
+```{r}
+tanzania <- read_csv('final_train.csv') %>% select(-X1)
+
+tanzania$status_group <- as.factor(tanzania$status_group)
+```
+
+```{r}
+set.seed(510)
+
+indexes <- sample(1:nrow(tanzania), 0.75 * nrow(tanzania))
+train_data <- tanzania[indexes,]
+test_data <- tanzania[-indexes,]
+```
+
+```{r}
+load("xgb_model.Rdata")
+```
+
+# Confusion matrix
+
+```{r}
+confusionMatrix(predict(xgb_model, test_data),factor(test_data$status_group))
+```
+
+```{r}
+xgb_model
+```
+
+```{r}
+xgb_results <- xgb_model$results %>% arrange(desc(Kappa))
+
+xgb_results
+```
+
+```{r}
+xgb_model$bestTune
+```
+
+```{r}
+xgb_results2 <- xgb_results %>% select(c("eta", "max_depth", "colsample_bytree", "min_child_weight", "Kappa"))
+
+xgb_results2
+```
+
+```{r}
+xgb_results2$max_depth <- as.factor(xgb_results2$max_depth)
+levels(xgb_results2$max_depth) <- c("max_depth_2", "max_depth_4", "max_depth_6", "max_depth_8")
+
+xgb_results2$colsample_bytree <- as.factor(xgb_results2$colsample_bytree)
+
+ggplot(xgb_results2, aes(eta, Kappa)) + 
+  geom_point(aes(color = colsample_bytree, alpha = 0.75)) +
+  geom_jitter(aes(color = colsample_bytree)) + 
+  facet_wrap(max_depth~.) + 
+  theme_bw() + 
+  labs(title = "XGBoost Parameter Grid", caption = "gamma = c(0,5)\nmin_child_weight = 5") 
+  
+```
+
+```{r}
+library(vip)
+
+vip(xgb_model, num_features = 12, geom = "col", aesthetics = list(fill = "bisque1", size = 0.5, color = "mistyrose3")) + theme_bw()
+```
+
+# Xgboost 2 model (only 6 most important variables used)
+
+```{r}
+tanzania <- read_csv('final_train.csv') %>% select(-X1)
+
+tanzania$status_group <- as.factor(tanzania$status_group)
+```
+
+```{r}
+tanzania <- tanzania %>% select(other_extraction_from_rivers_lakes, med_lg_SE_region, small_med_NW_regions, handpump_groundwater_shallow_wells, amount_tsh, well_strain, status_group)
+```
+
+```{r}
+set.seed(510)
+
+indexes <- sample(1:nrow(tanzania), 0.75 * nrow(tanzania))
+train_data <- tanzania[indexes,]
+test_data <- tanzania[-indexes,]
+```
+
+```{r}
+load("xgb_model2.Rdata")
+```
+
+# Confusion matrix
+
+```{r}
+confusionMatrix(predict(xgb_model2, test_data),factor(test_data$status_group))
+```
+
+```{r}
+xgb_model2$bestTune
+```
+
+```{r}
+xgb_results <- xgb_model2$results %>% arrange(desc(Kappa))
+
+xgb_results
+```
+
+```{r}
+xgb_results2 <- xgb_results %>% select(c("eta", "max_depth", "colsample_bytree", "min_child_weight", "Kappa"))
+
+xgb_results2
+```
+
+```{r}
+xgb_results2$max_depth <- as.factor(xgb_results2$max_depth)
+levels(xgb_results2$max_depth) <- c("max_depth_2", "max_depth_4", "max_depth_6", "max_depth_8")
+
+xgb_results2$colsample_bytree <- as.factor(xgb_results2$colsample_bytree)
+
+ggplot(xgb_results2, aes(eta, Kappa)) + 
+  geom_point(aes(color = colsample_bytree, alpha = 0.75)) +
+  geom_jitter(aes(color = colsample_bytree)) + 
+  facet_wrap(max_depth~.) + 
+  theme_bw() + 
+  labs(title = "XGBoost Parameter Grid", caption = "gamma = c(0,5)\nmin_child_weight = 5") 
+  
+```
+
+```{r}
+library(vip)
+
+vip(xgb_model2, num_features = 12, geom = "col", aesthetics = list(fill = "bisque1", size = 0.5, color = "mistyrose3")) + theme_bw()
+```
+
+# Xgboost 3 model (binary classification)
+
+```{r}
+tanzania <- read_csv('final_train.csv') %>% select(-X1)
+
+tanzania$status_group <- as.factor(tanzania$status_group)
+
+tanzania %>% head(20)
+```
+
+```{r}
+tanzania$status_group <- fct_collapse(tanzania$status_group, functional = c("functional"),  needs_attention = c("functional needs repair", "non functional"))
+
+tanzania %>% head(20) 
+```
+
+```{r}
+set.seed(510)
+
+indexes <- sample(1:nrow(tanzania), 0.75 * nrow(tanzania))
+train_data <- tanzania[indexes,]
+test_data <- tanzania[-indexes,]
+```
+
+```{r}
+load("xgb_model3.Rdata")
+```
+
+# Confusion matrix
+
+```{r}
+confusionMatrix(predict(xgb_model3, test_data),factor(test_data$status_group))
+```
+
+```{r}
+xgb_model3$bestTune
+```
+
+```{r}
+xgb_results <- xgb_model3$results %>% arrange(desc(Kappa))
+
+xgb_results
+```
+
+```{r}
+xgb_results2 <- xgb_results %>% select(c("eta", "max_depth", "colsample_bytree", "min_child_weight", "Kappa"))
+
+xgb_results2
+```
+
+```{r}
+xgb_results2$max_depth <- as.factor(xgb_results2$max_depth)
+levels(xgb_results2$max_depth) <- c("max_depth_2", "max_depth_4", "max_depth_6", "max_depth_8")
+
+xgb_results2$colsample_bytree <- as.factor(xgb_results2$colsample_bytree)
+
+ggplot(xgb_results2, aes(eta, Kappa)) + 
+  geom_point(aes(color = colsample_bytree, alpha = 0.75)) +
+  geom_jitter(aes(color = colsample_bytree)) + 
+  facet_wrap(max_depth~.) + 
+  theme_bw() + 
+  labs(title = "XGBoost Parameter Grid", caption = "gamma = c(0,5)\nmin_child_weight = 5") 
+```
+
+```{r}
+library(vip)
+
+vip(xgb_model3, num_features = 12, geom = "col", aesthetics = list(fill = "bisque1", size = 0.5, color = "mistyrose3")) + theme_bw()
+```
+
+
+# Xgboost model 4 (binary classification; 6 variables only)
+
+```{r}
+tanzania <- read_csv('final_train.csv') %>% select(-X1)
+
+tanzania$status_group <- as.factor(tanzania$status_group)
+
+tanzania %>% head(20)
+```
+
+```{r}
+tanzania$status_group <- fct_collapse(tanzania$status_group, functional = c("functional"),  needs_attention = c("functional needs repair", "non functional"))
+
+tanzania %>% head(20) 
+```
+
+```{r}
+tanzania <- tanzania %>% select(other_extraction_from_rivers_lakes, med_lg_SE_region, small_med_NW_regions, handpump_groundwater_shallow_wells, amount_tsh, well_strain, status_group)
+```
+
+```{r}
+set.seed(510)
+
+indexes <- sample(1:nrow(tanzania), 0.75 * nrow(tanzania))
+train_data <- tanzania[indexes,]
+test_data <- tanzania[-indexes,]
+```
+
+```{r}
+load("xgb_model4.Rdata")
+```
+
+# Confusion matrix
+
+```{r}
+confusionMatrix(predict(xgb_model4, test_data),factor(test_data$status_group))
+```
+
+```{r}
+xgb_model4$bestTune
+```
+
+```{r}
+xgb_results <- xgb_model4$results %>% arrange(desc(Kappa))
+
+xgb_results
+```
+
+```{r}
+xgb_results2 <- xgb_results %>% select(c("eta", "max_depth", "colsample_bytree", "min_child_weight", "Kappa"))
+
+xgb_results2
+```
+
+```{r}
+xgb_results2$max_depth <- as.factor(xgb_results2$max_depth)
+levels(xgb_results2$max_depth) <- c("max_depth_2", "max_depth_4", "max_depth_6", "max_depth_8")
+
+xgb_results2$colsample_bytree <- as.factor(xgb_results2$colsample_bytree)
+
+ggplot(xgb_results2, aes(eta, Kappa)) + 
+  geom_point(aes(color = colsample_bytree, alpha = 0.75)) +
+  geom_jitter(aes(color = colsample_bytree)) + 
+  facet_wrap(max_depth~.) + 
+  theme_bw() + 
+  labs(title = "XGBoost Parameter Grid", caption = "gamma = c(0,5)\nmin_child_weight = 5") 
+  
+```
+
+```{r}
+library(vip)
+
+vip(xgb_model4, num_features = 12, geom = "col", aesthetics = list(fill = "bisque1", size = 0.5, color = "mistyrose3")) + theme_bw()
+```

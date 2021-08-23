@@ -1,0 +1,257 @@
+---
+title: "models to run overnight and chill to"
+author: "Nick Kachanyuk"
+date: "8/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("C:/Users/nkach/Documents/Data Science/Classes/DS 510/tanzania")
+```
+
+```{r}
+library(xgboost)
+library(caret)
+library(dplyr)
+library(DiagrammeR)
+library(tidyverse)
+library(forcats)
+```
+
+
+# Original model
+
+```{r}
+tanzania <- read_csv('final_train.csv') %>% select(-X1)
+
+tanzania$status_group <- as.factor(tanzania$status_group)
+```
+
+```{r}
+set.seed(510)
+
+indexes <- sample(1:nrow(tanzania), 0.75 * nrow(tanzania))
+train_data <- tanzania[indexes,]
+test_data <- tanzania[-indexes,]
+```
+
+```{r}
+# create tuning grid
+grid_default <- expand.grid(nrounds = c(1000),
+                            max_depth = c(2, 4, 6, 8),
+                            eta = c(0.05, 0.3, 0.4, 0.5, 0.8),
+                            gamma = c(0, 5),
+                            colsample_bytree = c(0.5, 0.7, 0.9),
+                            min_child_weight = c(5),
+                            subsample = c(0.50, 0.75, 0.90))
+```
+
+```{r}
+set.seed(510)
+
+library(doParallel) 
+cl <- makePSOCKcluster(detectCores()) 
+clusterEvalQ(cl, library(foreach)) 
+registerDoParallel(cl)
+
+xgb_model <- train(status_group ~ .,
+                   data = train_data,
+                   tuneGrid = grid_default,
+                   method = "xgbTree",
+                   metric = "Kappa",
+                   trControl = trainControl(method = 'cv', number = 5, verboseIter = T))
+
+stopCluster(cl)
+registerDoSEQ()# close multi-core cluster
+rm(cl)
+```
+
+```{r}
+save(xgb_model, file="xgb_model.Rdata")
+```
+
+
+# Model xgboost2 to run (6 predictors only)
+
+```{r}
+tanzania <- read_csv('final_train.csv') %>% select(-X1)
+
+tanzania$status_group <- as.factor(tanzania$status_group)
+```
+
+```{r}
+tanzania <- tanzania %>% select(other_extraction_from_rivers_lakes, med_lg_SE_region, small_med_NW_regions, handpump_groundwater_shallow_wells, amount_tsh, well_strain, status_group)
+```
+
+```{r}
+set.seed(510)
+
+indexes <- sample(1:nrow(tanzania), 0.75 * nrow(tanzania))
+train_data <- tanzania[indexes,]
+test_data <- tanzania[-indexes,]
+```
+
+```{r}
+# create tuning grid
+grid_default <- expand.grid(nrounds = c(1000),
+                            max_depth = c(2, 4, 6, 8),
+                            eta = c(0.05, 0.3, 0.4, 0.5, 0.8),
+                            gamma = c(0, 5),
+                            colsample_bytree = c(0.5, 0.7, 0.9),
+                            min_child_weight = c(5),
+                            subsample = c(0.50, 0.75, 0.90))
+```
+
+
+```{r}
+set.seed(510)
+
+library(doParallel) 
+cl <- makePSOCKcluster(detectCores()) 
+clusterEvalQ(cl, library(foreach)) 
+registerDoParallel(cl)
+
+xgb_model2 <- train(status_group ~ .,
+                   data = train_data,
+                   tuneGrid = grid_default,
+                   method = "xgbTree",
+                   metric = "Kappa",
+                   trControl = trainControl(method = 'cv', number = 5, verboseIter = T))
+
+stopCluster(cl)
+registerDoSEQ()# close multi-core cluster
+rm(cl)
+```
+
+```{r}
+save(xgb_model2, file="xgb_model2.Rdata")
+```
+
+
+# Model xgboost 3 to run (binary classification)
+
+```{r}
+tanzania <- read_csv('final_train.csv') %>% select(-X1)
+
+tanzania$status_group <- as.factor(tanzania$status_group)
+
+tanzania %>% head(20)
+```
+
+```{r}
+tanzania$status_group <- fct_collapse(tanzania$status_group, functional = c("functional"),  needs_attention = c("functional needs repair", "non functional"))
+
+tanzania %>% head(20) 
+```
+
+```{r}
+set.seed(510)
+
+indexes <- sample(1:nrow(tanzania), 0.75 * nrow(tanzania))
+train_data <- tanzania[indexes,]
+test_data <- tanzania[-indexes,]
+```
+
+```{r}
+# create tuning grid
+grid_default <- expand.grid(nrounds = c(1000),
+                            max_depth = c(2, 4, 6, 8),
+                            eta = c(0.05, 0.3, 0.4, 0.5, 0.8),
+                            gamma = c(0, 5),
+                            colsample_bytree = c(0.5, 0.7, 0.9),
+                            min_child_weight = c(5),
+                            subsample = c(0.50, 0.75, 0.90))
+```
+
+```{r}
+set.seed(510)
+
+library(doParallel) 
+cl <- makePSOCKcluster(detectCores()) 
+clusterEvalQ(cl, library(foreach)) 
+registerDoParallel(cl)
+
+xgb_model3 <- train(status_group ~ .,
+                   data = train_data,
+                   tuneGrid = grid_default,
+                   method = "xgbTree",
+                   metric = "Kappa",
+                   trControl = trainControl(method = 'cv', number = 5, verboseIter = T))
+
+stopCluster(cl)
+registerDoSEQ()# close multi-core cluster
+rm(cl)
+```
+
+```{r}
+save(xgb_model3, file="xgb_model3.Rdata")
+```
+
+
+# Xgboost 4 model (binary classification, w/ 6 top features)
+
+```{r}
+tanzania <- read_csv('final_train.csv') %>% select(-X1)
+
+tanzania$status_group <- as.factor(tanzania$status_group)
+
+tanzania %>% head(20)
+```
+
+```{r}
+tanzania$status_group <- fct_collapse(tanzania$status_group, functional = c("functional"),  needs_attention = c("functional needs repair", "non functional"))
+
+tanzania %>% head(20) 
+```
+
+```{r}
+tanzania <- tanzania %>% select(other_extraction_from_rivers_lakes, med_lg_SE_region, small_med_NW_regions, handpump_groundwater_shallow_wells, amount_tsh, well_strain, status_group)
+```
+
+```{r}
+set.seed(510)
+
+indexes <- sample(1:nrow(tanzania), 0.75 * nrow(tanzania))
+train_data <- tanzania[indexes,]
+test_data <- tanzania[-indexes,]
+```
+
+```{r}
+# create tuning grid
+grid_default <- expand.grid(nrounds = c(1000),
+                            max_depth = c(2, 4, 6, 8),
+                            eta = c(0.05, 0.3, 0.4, 0.5, 0.8),
+                            gamma = c(0, 5),
+                            colsample_bytree = c(0.5, 0.7, 0.9),
+                            min_child_weight = c(5),
+                            subsample = c(0.50, 0.75, 0.90))
+```
+
+```{r}
+set.seed(510)
+
+library(doParallel) 
+cl <- makePSOCKcluster(detectCores()) 
+clusterEvalQ(cl, library(foreach)) 
+registerDoParallel(cl)
+
+xgb_model4 <- train(status_group ~ .,
+                   data = train_data,
+                   tuneGrid = grid_default,
+                   method = "xgbTree",
+                   metric = "Kappa",
+                   trControl = trainControl(method = 'cv', number = 5, verboseIter = T))
+
+stopCluster(cl)
+registerDoSEQ()# close multi-core cluster
+rm(cl)
+```
+
+```{r}
+save(xgb_model4, file="xgb_model4.Rdata")
+```
+

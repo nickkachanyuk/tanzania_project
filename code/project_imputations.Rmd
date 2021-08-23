@@ -1,0 +1,110 @@
+---
+title: "project imputations"
+author: "Nick Kachanyuk"
+date: "7/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Missing data imputations
+
+## construction year ZERO VALUE imputation by median value of construction year
+
+```{r}
+train %>% filter(construction_year >= 1900) %>% summarize(median_construction_year = median(construction_year))
+```
+
+```{r}
+train$construction_year[train$construction_year == 0]<- 2000
+```
+
+```{r}
+summary(train$construction_year)
+```
+
+## amount tsh ZERO VALUE imputation by construction year, extraction type class, quantity, and waterpoint type group mean values
+
+```{r}
+train %>% group_by(extraction_type_class) %>% summarize(mean_amount_tsh = mean(amount_tsh)) %>% arrange((desc(mean_amount_tsh)))
+```
+
+```{r}
+train$amount_tsh[train$amount_tsh == 0 & train$extraction_type_class == "gravity"] <- 412
+train$amount_tsh[train$amount_tsh == 0 & train$extraction_type_class == "submersible"] <- 398
+train$amount_tsh[train$amount_tsh == 0 & train$extraction_type_class == "motorpump"] <- 329
+train$amount_tsh[train$amount_tsh == 0 & train$extraction_type_class == "handpump"] <- 229
+train$amount_tsh[train$amount_tsh == 0 & train$extraction_type_class == "rope pump"] <- 203
+train$amount_tsh[train$amount_tsh == 0 & train$extraction_type_class == "other"] <- 83
+train$amount_tsh[train$amount_tsh == 0 & train$extraction_type_class == "wind-powered"] <- 41
+```                                                               
+                                                               
+## longitude ZERO value imputation by region mean values
+
+```{r}
+train %>% group_by(region) %>% summarize(mean_longitude = mean(longitude)) %>% arrange((desc(mean_longitude)))
+```
+
+```{r}
+train$longitude[train$longitude == 0 & train$region == "Mtwara"] <- 39.39767
+train$longitude[train$longitude == 0 & train$region == "Dar es Salaam"] <- 39.21580
+train$longitude[train$longitude == 0 & train$region == "Lindi"] <- 38.99711
+train$longitude[train$longitude == 0 & train$region == "Pwani"] <- 38.87893
+train$longitude[train$longitude == 0 & train$region == "Tanga"] <- 38.50651
+train$longitude[train$longitude == 0 & train$region == "Kilimanjaro"] <- 37.50511
+train$longitude[train$longitude == 0 & train$region == "Morogoro"] <- 37.04591
+train$longitude[train$longitude == 0 & train$region == "Arusha"] <- 36.55271
+train$longitude[train$longitude == 0 & train$region == "Dodoma"] <- 36.04417
+train$longitude[train$longitude == 0 & train$region == "Manyara"] <- 35.93292
+train$longitude[train$longitude == 0 & train$region == "Ruvuma"] <- 35.72930
+train$longitude[train$longitude == 0 & train$region == "Iringa"] <- 34.89599
+train$longitude[train$longitude == 0 & train$region == "Singida"] <- 34.74184
+train$longitude[train$longitude == 0 & train$region == "Mara"] <- 34.15394
+train$longitude[train$longitude == 0 & train$region == "Mbeya"] <- 33.53150
+train$longitude[train$longitude == 0 & train$region == "Tabora"] <- 32.88158
+train$longitude[train$longitude == 0 & train$region == "Rukwa"] <- 31.28439
+train$longitude[train$longitude == 0 & train$region == "Kagera"] <- 31.23326
+train$longitude[train$longitude == 0 & train$region == "Kigoma"] <- 30.21468
+train$longitude[train$longitude == 0 & train$region == "Shinyanga"] <- 26.53472
+train$longitude[train$longitude == 0 & train$region == "Mwanza"] <- 24.48264
+```
+
+## population ZERO value imputation by mean value of population
+
+```{r}
+mean(train$population)
+```
+
+```{r}
+train$population[train$population == 0] <- 180
+```
+
+```{r}
+train %>% group_by(region) %>% summarize(mean_population = mean(population)) %>% arrange((desc(mean_population)))
+```
+
+## Replacing NA values in public meeting with "unknown"
+
+```{r}
+train$public_meeting[is.na(train$public_meeting)] <- "unknown"
+train$public_meeting[train$public_meeting == T] <- "yes"
+train$public_meeting[train$public_meeting == F] <- "no"
+```
+
+```{r}
+train %>% ggplot(aes(public_meeting)) + geom_bar()
+```
+
+## Replacing NA values in permit with "unknown"
+
+```{r}
+train$permit[is.na(train$permit)] <- "unknown"
+train$permit[train$permit == T] <- "yes"
+train$permit[train$permit == F] <- "no"
+```
+
+```{r}
+train %>% ggplot(aes(permit)) + geom_bar()
+```

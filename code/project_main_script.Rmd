@@ -1,0 +1,324 @@
+---
+title: "project main script"
+author: "Nick Kachanyuk"
+date: "6/22/2021"
+output: html_document
+---
+
+ 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(caret)
+library(fastDummies)
+library(xgboost)
+library(mlr)
+```
+
+# Loading the datasets
+
+```{r}
+train <- read_csv("training_set_values.csv")
+train_labels <- read_csv("training_set_labels.csv")
+```
+
+
+# Join train values and train labels by id column
+
+```{r}
+train.joined <- left_join(train, train_labels, by = "id")
+rm(train, train_labels)
+```
+
+# Changing character to categorical variables
+
+```{r}
+train.joined$region <- as.factor(train.joined$region)
+train.joined$funder <- as.factor(train.joined$funder)
+train.joined$installer <- as.factor(train.joined$installer)
+train.joined$wpt_name <- as.factor(train.joined$wpt_name)
+train.joined$basin <- as.factor(train.joined$basin)
+train.joined$subvillage <- as.factor(train.joined$subvillage)
+train.joined$lga <- as.factor(train.joined$lga)
+train.joined$ward <- as.factor(train.joined$ward)
+train.joined$recorded_by <- as.factor(train.joined$recorded_by)
+train.joined$scheme_management <- as.factor(train.joined$scheme_management)
+train.joined$scheme_name <- as.factor(train.joined$scheme_name)
+train.joined$extraction_type <- as.factor(train.joined$extraction_type)
+train.joined$extraction_type_group <- as.factor(train.joined$extraction_type_group)
+train.joined$extraction_type_class <- as.factor(train.joined$extraction_type_class)
+train.joined$management <- as.factor(train.joined$management)
+train.joined$management_group <- as.factor(train.joined$management_group)
+train.joined$payment <- as.factor(train.joined$payment)
+train.joined$payment_type <- as.factor(train.joined$payment_type)
+train.joined$water_quality <- as.factor(train.joined$water_quality)
+train.joined$quality_group <- as.factor(train.joined$quality_group)
+train.joined$quantity <- as.factor(train.joined$quantity)
+train.joined$quantity_group <- as.factor(train.joined$quantity_group)
+train.joined$source <- as.factor(train.joined$source)
+train.joined$source_type <- as.factor(train.joined$source_type)
+train.joined$source_class <- as.factor(train.joined$source_class)
+train.joined$waterpoint_type <- as.factor(train.joined$waterpoint_type)
+train.joined$waterpoint_type_group <- as.factor(train.joined$waterpoint_type_group)
+train.joined$status_group <- as.factor(train.joined$status_group)
+train.joined$construction_year <- as.numeric(train.joined$construction_year)
+```
+
+# Missing Data
+
+```{r}
+# creating a df w/ missing data per variable
+missing.values <- train.joined %>%
+    gather(key = "key", value = "val") %>%
+    mutate(is.missing = is.na(val)) %>%
+    group_by(key, is.missing) %>%
+    dplyr::summarise(num.missing = n()) %>%
+    filter(is.missing==T) %>%
+    select(-is.missing) %>%
+    arrange(desc(num.missing))
+
+# visualizing the missing data
+plot1 <- missing.values %>%
+  ggplot() +
+    geom_bar(aes(x=key, y=num.missing), stat = 'identity') +
+    labs(x='variable', y="number of missing values", title='Number of missing values') +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# visualizing missing data by row in each variable
+plot2 <- train.joined %>%
+  dplyr::mutate(row_n = row_number()) %>%
+  gather(-row_n, key = "key", value = "val") %>%
+  mutate(isna = is.na(val)) %>%
+  ggplot(aes(key, row_n, fill = isna)) +
+    geom_raster(alpha=0.8) +
+    scale_fill_manual(name = "",
+        values = c('steelblue', 'tomato3'),
+        labels = c("Present", "Missing")) +
+    labs(x = "Variable",
+           y = "Row Number", title = "Missing values in rows") +
+    coord_flip()
+
+plot1
+plot2 + theme_bw()
+```
+
+```{r}
+ggsave("plot2.png", path = "C:/Users/nkach/Documents/Data Science/Classes/DS 510/tanzania/saved-plots")
+```
+
+```{r}
+rm(missing.values, plot1, plot2)
+```
+
+# Appendix A: project_EDA.Rmd runs here to see the first collection of data visualizations
+
+# Removal of problematic variables
+
+```{r}
+# based on the missing data observation there are variables that need to or at least should be considered for disqualification from the analysis. installer and funder share a similar pattern of missing data where the rows for both variables match in observations where missing data is found. scheme name is a variable that contains a lot of missing data as well on top of being a categorical variable with many levels. scheme management is a variable that contains fewer NAs but also has many categories. permit may be a good variable to have, so imputation method is required if we were to progress with this variable. subvillage, district code, lga, and ward are too local of a variable for my research question.
+
+# wpt_name should also be excluded from modeling because each name is unique for each waterpoint; num_private is a variable with no information about what it measures so it should also be excluded; recorded by is also not important; region code should also be excluded because it conveys the same information as region but also contains codes for 4 regions that were not included in regions. it may seem that the solution would be to go off based region code because the 4 regions do exist in 2012 census but not in 2006 census (i.e. they are new regions) but 1) region codes are inaccurate (region code does not match the actual region code found on outside internet resources) which makes identifying the regions not mentioned in region variable almost impossible and 2) since the new 4 regions don't exist when the 2006 census data, it is not possible to make an generalizations about improvements between those two time periods.
+
+train <- train.joined %>% select(-c(funder, installer, wpt_name, num_private, subvillage, district_code, lga, ward, recorded_by, scheme_name, scheme_management, id, region_code, extraction_type, extraction_type_group, management, payment, water_quality, quantity, source, waterpoint_type, date_recorded))
+```
+
+```{r}
+rm(train.joined)
+```
+
+# Appendix B: imputations.Rmd runs here to impute incorrect and missing values for the remaining variables
+
+```{r}
+summary(train)
+```
+
+```{r}
+str(train)
+```
+
+```{r}
+train$public_meeting <- as.factor(train$public_meeting)
+train$permit <- as.factor(train$permit)
+```
+
+# Creating new variables in the dataset that come from 2012 census data
+
+```{r}
+# note do not add these variables until the original variables in the data are cleaned (i.e. add these variables last)
+train <- train %>% mutate(
+  total_region_pop = recode(region, 
+                            "Dodoma" = 2083588,
+                            "Arusha" = 1694310,
+                            "Kilimanjaro" = 1640087,
+                            "Tanga" = 2045205,
+                            "Morogoro" = 2218492,
+                            "Pwani" = 1098668,
+                            "Dar es Salaam" = 4364541,
+                            "Lindi" = 864652,
+                            "Mtwara" = 1270854,
+                            "Ruvuma" = 1376891,
+                            "Iringa" = 941238,
+                            "Mbeya" = 2707410,
+                            "Singida" = 1370637,
+                            "Tabora" = 2291623,
+                            "Rukwa" = 1004539,
+                            "Kigoma" = 2127930,
+                            "Shinyanga" = 1534808,
+                            "Kagera" = 2458023,
+                            "Mwanza" = 2772509,
+                            "Mara" = 1743830,
+                            "Manyara" = 1425131),
+  households_per_region = recode(region,
+                                 "Dodoma" = 450305,
+                                 "Arusha" = 376336,
+                                 "Kilimanjaro" = 381526,
+                                 "Tanga" = 435583,
+                                 "Morogoro" = 501794,
+                                 "Pwani" = 254810,
+                                 "Dar es Salaam" = 1083381,
+                                 "Lindi" = 224316,
+                                 "Mtwara" = 342165,
+                                 "Ruvuma" = 300005,
+                                 "Iringa" = 220776,
+                                 "Mbeya" = 630593,
+                                 "Singida" = 255613,
+                                 "Tabora" = 379770,
+                                 "Rukwa" = 198011,
+                                 "Kigoma" = 370374,
+                                 "Shinyanga" = 258981,
+                                 "Kagera" = 521028,
+                                 "Mwanza" = 481107,
+                                 "Mara" = 308483,
+                                 "Manyara" = 271050),
+  mhead_avg_household_size_per_region = recode(region,
+                                    "Dodoma" = 3.3,
+                                    "Arusha" = 3.4,
+                                    "Kilimanjaro" = 3.2,
+                                    "Tanga" = 3.4,
+                                    "Morogoro" = 3.1,
+                                    "Pwani" = 3.0,
+                                    "Dar es Salaam" = 2.9,
+                                    "Lindi" = 2.8,
+                                    "Mtwara" = 2.6,
+                                    "Ruvuma" = 3.1,
+                                    "Iringa" = 3.1,
+                                    "Mbeya" = 3.2,
+                                    "Singida" = 3.8,
+                                    "Tabora" = 4.2,
+                                    "Rukwa" = 3.4,
+                                    "Kigoma" = 4.0,
+                                    "Shinyanga" = 4.1,
+                                    "Kagera" = 3.3,
+                                    "Mwanza" = 4.1,
+                                    "Mara" = 4.3,
+                                    "Manyara" = 3.9),
+  fhead_avg_household_size_per_region = recode(region,
+                                      "Dodoma" = 7.3,
+                                      "Arusha" = 6.2,
+                                      "Kilimanjaro" = 5.9,
+                                      "Tanga" = 7.2,
+                                      "Morogoro" = 7.2,
+                                      "Pwani" = 7.1,
+                                      "Dar es Salaam" = 5.8,
+                                      "Lindi" = 5.8,
+                                      "Mtwara" = 5.6,
+                                      "Ruvuma" = 8.0,
+                                      "Iringa" = 6.0,
+                                      "Mbeya" = 6.1,
+                                      "Singida" = 8.3,
+                                      "Tabora" = 10.1,
+                                      "Rukwa" = 9.3,
+                                      "Kigoma" = 7.8,
+                                      "Shinyanga" = 9.6,
+                                      "Kagera" = 7.4,
+                                      "Mwanza" = 8.7,
+                                      "Mara" = 7.6,
+                                      "Manyara" = 7.7),
+  literacy_rate_by_region = recode(region,
+                                    "Dodoma" = 67.5,
+                                    "Arusha" = 80.3,
+                                    "Kilimanjaro" = 92.2,
+                                    "Tanga" = 79.8,
+                                    "Morogoro" = 76.9,
+                                    "Pwani" = 73.6,
+                                    "Dar es Salaam" = 96.1,
+                                    "Lindi" = 68.0,
+                                    "Mtwara" = 70.8,
+                                    "Ruvuma" = 84.4,
+                                    "Iringa" = 81.9,
+                                    "Mbeya" = 80.8,
+                                    "Singida" = 73.6,
+                                    "Tabora" = 59.0,
+                                    "Rukwa" = 69.9,
+                                    "Kigoma" = 76.0,
+                                    "Shinyanga" = 68.4,
+                                    "Kagera" = 76.8,
+                                    "Mwanza" = 79.9,
+                                    "Mara" = 80.7,
+                                    "Manyara" = 72.6),
+  pct_unemployed_by_region = recode(region,
+                                    "Dodoma" = 1.8,
+                                    "Arusha" = 3.2,
+                                    "Kilimanjaro" = 2.3,
+                                    "Tanga" = 2.1,
+                                    "Morogoro" = 2.3,
+                                    "Pwani" = 3.2,
+                                    "Dar es Salaam" = 6.5,
+                                    "Lindi" = 1.6,
+                                    "Mtwara" = 2.3,
+                                    "Ruvuma" = 1.9,
+                                    "Iringa" = 1.6,
+                                    "Mbeya" = 2.4,
+                                    "Singida" = 1.9,
+                                    "Tabora" = 2.0,
+                                    "Rukwa" = 1.2,
+                                    "Kigoma" = 1.8,
+                                    "Shinyanga" = 2.4,
+                                    "Kagera" = 1.3,
+                                    "Mwanza" = 2.7,
+                                    "Mara" = 2.7,
+                                    "Manyara" = 2.8),
+  region_area_sq_mi = recode(region,
+                              "Dodoma" = 15950,
+                              "Arusha" = 14508,
+                              "Kilimanjaro" = 5120,
+                              "Tanga" = 10296,
+                              "Morogoro" = 27268,
+                              "Pwani" = 12566,
+                              "Dar es Salaam" = 538,
+                              "Lindi" = 25500,
+                              "Mtwara" = 6450,
+                              "Ruvuma" = 24583,
+                              "Iringa" = 13708,
+                              "Mbeya" = 13882,
+                              "Singida" = 19050,
+                              "Tabora" = 29400,
+                              "Rukwa" = 8800,
+                              "Kigoma" = 14300,
+                              "Shinyanga" = 7298,
+                              "Kagera" = 9755,
+                              "Mwanza" = 3655,
+                              "Mara" = 8400,
+                              "Manyara" = 17190),
+  region_pop_density = total_region_pop/region_area_sq_mi,
+  well_strain = (population/total_region_pop) * region_pop_density)
+
+# Note: Njombe, Katavi, Simiyu, and Geita regions are not represented as regions in the water data but are considered as regions in 2012 census 
+```
+
+# Turn categorical IVs into dummies for PCA
+
+```{r}
+train <- train %>% dummy_cols(., select_columns = c('basin', 'region', 'extraction_type_class', 'quality_group', 'quantity_group', 'source_type', 'source_class', 'waterpoint_type_group'), remove_first_dummy = F, remove_selected_columns = T)
+
+# did not remove first dummy because I'm doing PCA next and I think it makes sense to include all dummy variables; I tried it both ways and there was no significant difference.
+```
+
+# Appendinx C: PCA_control_variables.Rmd runs here for dimensiaonality reduction
+
+# Appendix D: project_xgboost.Rmd runs here for modeling phase of the project

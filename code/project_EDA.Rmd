@@ -1,0 +1,289 @@
+---
+title: "project EDA"
+author: "Nick Kachanyuk"
+date: "6/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Status group
+
+```{r}
+train.joined %>% group_by(status_group) %>% dplyr::summarize(well_count = n())
+```
+
+```{r}
+train.joined %>% ggplot(aes(status_group)) + geom_bar()
+```
+
+# amount tsh (numeric)
+
+```{r}
+summary(train.joined$amount_tsh)
+```
+
+```{r}
+train.joined %>% ggplot(aes(amount_tsh)) + geom_boxplot()
+```
+
+```{r}
+train.joined %>% ggplot() + geom_point(aes(x= region, y = amount_tsh, color = amount_tsh == 0)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+Regions that exclusively have zero values for amount_tsh are: Dodoma, Kagera, Mbeya, and Tabora
+
+```{r}
+train.joined %>% group_by(amount_tsh) %>% filter(amount_tsh == 0) %>% dplyr::summarize(well_count = n())
+```
+
+41639(70%) of observations in the data contain amount_tsh value as zero. If this variable were to be used in analysis in needs to be imputed via some sort of categorical variable.
+
+# gps height
+
+```{r}
+train.joined %>% ggplot(aes(gps_height)) + geom_boxplot()
+```
+
+No outliers, right skewed, and negative values (below sea level).
+
+# longitude
+
+```{r}
+train.joined %>% ggplot(aes(longitude)) + geom_boxplot()
+```
+
+```{r}
+train.joined %>% group_by(longitude) %>% filter(longitude == 0) %>% dplyr::summarize(well_count = n())
+```
+
+1812 wells have longitude values of zero. https://www.mapsofworld.com/lat_long/tanzania-lat-long.html shows that there should be no longitude values that are 0.
+
+Imputation is required if the variable were to be used.
+
+# latitude
+
+```{r}
+train.joined %>% ggplot(aes(latitude)) + geom_boxplot()
+```
+
+Latitude values fall within reasonable range according to the map.
+
+# basin
+
+```{r}
+train.joined %>% group_by(basin) %>% dplyr::summarize(well_count = n())
+```
+
+```{r}
+train.joined %>% ggplot(aes(basin, fill = status_group)) + geom_bar(position = "fill") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab("proportions by status group")
+```
+
+```{r}
+train.joined %>% ggplot(aes(basin, fill = status_group)) + geom_bar(position = "dodge") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+# region
+
+```{r}
+train.joined %>% group_by(region) %>% dplyr::summarize(well_count = n()) %>% arrange((desc(well_count)))
+```
+
+```{r}
+train.joined %>% ggplot(aes(region, fill = status_group)) + geom_bar(position = "dodge") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+# population
+
+```{r}
+train.joined %>% ggplot(aes(population)) + geom_boxplot()
+```
+
+Right skew for population variable.
+
+```{r}
+train.joined %>% group_by(population) %>% dplyr::summarize(well_count = n()) %>% arrange((desc(well_count)))
+```
+
+There are 21381 wells that have a population of zero around the well. It is hard to determine if these are faulty values since there is no definition what "near" actually means in terms of physical distance. If we were to agree with this finding that this may support claims that people often have to travel long distances to obtain water (water.org).
+
+```{r}
+train.joined %>% ggplot(aes(region, population, color = status_group)) + geom_point() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + geom_jitter(alpha = 0.5)
+```
+
+```{r}
+# avg population near the well for functional wells
+
+train.joined %>% filter(status_group == "functional") %>% group_by(region) %>% summarize(mean_pop = mean(population)) %>% arrange((desc(mean_pop)))
+
+train.joined %>% filter(status_group == "functional needs repair") %>% group_by(region) %>% summarize(mean_pop = mean(population)) %>% arrange((desc(mean_pop)))
+
+train.joined %>% filter(status_group == "non functional") %>% group_by(region) %>% summarize(mean_pop = mean(population)) %>% arrange((desc(mean_pop)))
+```
+
+Based on the scatter plot and the tables. It seems that 4 regions have only zero values recorded for population variable. Imputation of zero values via mean pop of status group by region is needed.
+
+# public meeting
+
+```{r}
+train.joined %>% ggplot(aes(public_meeting)) + geom_bar()
+```
+
+```{r}
+train.joined %>% filter(is.na(public_meeting)) %>% group_by(region) %>% dplyr::summarize(well_count = n()) %>% arrange((desc(well_count)))
+```
+This variable needs the NA values recoded to unknown if it were to be used in the analysis.
+
+# Permit 
+
+```{r}
+train.joined %>% ggplot(.,aes(permit)) + geom_density(aes(fill = status_group)) + theme_bw()
+
+ggsave("permit.dist.png", path = "C:/Users/nkach/Documents/Data Science/Classes/DS 510/tanzania/saved-plots")
+```
+
+```{r}
+train.joined %>% filter(is.na(permit)) %>% group_by(region) %>% dplyr::summarize(well_count = n()) %>% arrange((desc(well_count)))
+```
+
+Missing values for public meeting and permit tend to not overlap.
+
+For the permit variable, fill the NA values with "unknown".
+
+# construction year
+
+```{r}
+train.joined %>% ggplot(aes(construction_year)) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+```{r}
+train.joined %>% filter(construction_year == 0) %>% group_by(region) %>% dplyr::summarize(well_count = n()) %>% arrange((desc(well_count)))
+```
+
+```{r}
+train.joined %>% filter(construction_year >= 1900) %>% ggplot(aes(construction_year)) + geom_boxplot()
+```
+
+The boxplot shows that of the values where construction year is known, about half of the wells were constructed after 2000.
+
+```{r}
+train.joined %>% group_by(region) %>% summarize(mean_year = mean(construction_year)) %>% arrange((desc(mean_year)))
+
+train.joined %>% group_by(region) %>% summarize(median_year = median(construction_year)) %>% arrange((desc(median_year)))
+```
+
+# extraction type
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(extraction_type,extraction_type,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("extraction type")
+```
+
+# extraction type group
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(extraction_type_group,extraction_type_group,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("extraction type group")
+```
+
+# extraction type class
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(extraction_type_class,extraction_type_class,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("extraction type class")
+```
+
+It seems most of the categories in extraction type and extraction type group relate a hand pump (india, swn are examples of hand pumps). Out of the 3 variables, extraction type class will be used.
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(extraction_type_class,extraction_type_class,function(x)-length(x)), fill = status_group)) + geom_bar(position = "fill") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("extraction type class") + ylab("proportions based on status group")
+```
+
+# management
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(management,management,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("management")
+```
+
+# management_group
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(management_group,management_group,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("management group")
+```
+
+It seems that management group is the better variable to keep because 1) it has less categories and 2) there are no inconsistency is labeling of the group (what's the difference between water authority vs water board?)
+
+# payment
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(payment,payment,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("payment")
+```
+
+# payment type
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(payment_type,payment_type,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("payment type")
+```
+
+Payment and payment type variables are the exact same variable. I keep the payment type variable.
+
+# water quality
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(water_quality,water_quality,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("water quality")
+```
+
+# quality group
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(quality_group,quality_group,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("quality group")
+```
+
+Reading the category names for both of these variables it seems that quality group is most concise and easiest to understand and water quality will be dropped.
+
+# quantity
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(quantity,quantity,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("quantity")
+```
+
+# quantity_group
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(quantity_group,quantity_group,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("quantity group")
+```
+
+Quantity and quantity group are the same variable. I will be using the quantity group variable.
+
+# source
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(source,source,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("source")
+```
+
+# source_type
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(source_type,source_type,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("source type")
+```
+
+# source_class
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(source_class,source_class,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("source class") 
+```
+
+Source type is the binned version of source. Source class is a binned version of source and source type variables. For now, I will keep both source type and source class variables and exclude source.
+
+# waterpoint_type
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(waterpoint_type,waterpoint_type,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("waterpoint type")
+```
+
+# waterpoint_type_group
+
+```{r}
+train.joined %>% ggplot(aes(x=reorder(waterpoint_type_group,waterpoint_type_group,function(x)-length(x)))) + geom_bar() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("waterpoint type group")
+```
+
+Waterpoint type group is the binned version of waterpoint type. Waterpoint type group will be kept.

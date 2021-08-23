@@ -1,0 +1,382 @@
+---
+title: "project PCA control variables"
+author: "Nick Kachanyuk"
+date: "7/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+# Removing non-control variables
+
+```{r}
+PCA_variables <- train %>% select(-amount_tsh, -public_meeting, -permit, -management_group, -payment_type, -literacy_rate_by_region, -pct_unemployed_by_region, - well_strain)
+
+# these will end up being the non-control variables
+```
+
+# PCA
+
+```{r}
+pr_train <- prcomp(x = select(PCA_variables,-status_group), scale = T, center = T)
+summary(pr_train)
+```
+
+```{r}
+screeplot(pr_train, type = "lines")
+```
+
+```{r}
+pr_train$rotation
+```
+
+```{r}
+library(ggbiplot)
+```
+
+```{r}
+ggbiplot(pr_train, ellipse = TRUE, groups=train$status_group) + coord_equal(ratio=0.25)
+```
+
+# PC 1
+
+```{r}
+prc <- bind_cols(select(train,status_group),as.data.frame(pr_train$x))
+
+prc %>% select(status_group, PC1) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 2
+
+```{r}
+prc %>% select(status_group, PC2) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 3
+
+```{r}
+prc %>% select(status_group, PC3) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 4
+
+```{r}
+prc %>% select(status_group, PC4) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+The graphs above show that the 4 principal components are not really great at separating the 3 functional groups from each other. This is also evident when looking at how much variance each PC captures where the PC 1 with the highest variance is about 11 %. 
+
+I try to fix this issue by further subsetting the PCR_variables into the following categories: geographic characteristics, demographics, characteristics of well
+
+# Geographic PCA
+
+```{r}
+geographic_PCA <- PCA_variables %>% select(status_group, gps_height, longitude, latitude, region_area_sq_mi, basin_Internal, `basin_Lake Nyasa`, `basin_Lake Rukwa`, `basin_Lake Tanganyika`, `basin_Lake Victoria`, basin_Pangani, basin_Rufiji, `basin_Ruvuma / Southern Coast`, `basin_Wami / Ruvu`, region_Arusha, `region_Dar es Salaam`, region_Dodoma, region_Iringa, region_Kagera, region_Kigoma, region_Kilimanjaro, region_Lindi, region_Manyara, region_Mara, region_Mbeya, region_Morogoro, region_Mtwara, region_Mwanza, region_Pwani, region_Rukwa, region_Ruvuma, region_Shinyanga, region_Singida, region_Tabora, region_Tanga)
+```
+
+```{r}
+pr_geo <- prcomp(x = select(geographic_PCA,-status_group), scale = T, center = T)
+summary(pr_geo)
+```
+
+```{r}
+screeplot(pr_geo, type = "lines")
+```
+
+```{r}
+pr_geo$rotation
+```
+
+```{r}
+ggbiplot(pr_geo, ellipse = TRUE, groups=train$status_group) + coord_equal(ratio=.85)
+```
+
+```{r}
+pca_geo_df <- rownames_to_column(as.data.frame(pr_geo$rotation)) %>%
+  select(1:5) %>%
+  filter(abs(PC1) >= 0.25 | abs(PC2) >= 0.25 | abs(PC3) >= 0.25 | abs(PC4) >= 0.25)
+
+pca_geo_df
+```
+
+```{r}
+save(pca_geo_df,file="pca_geo_df.Rda")
+#load("pca_geo_df.Rda")
+```
+
+```{r}
+# pc1_geo is south eastern Tanzanian regions that are moderate to large region area sq mi
+# pc2_geo is north western Tanzania region that are small to moderate region area sq mi
+```
+
+# PC 1
+
+```{r}
+prc_geo <- bind_cols(select(train,status_group),as.data.frame(pr_geo$x))
+
+prc_geo %>% select(status_group, PC1) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 2
+
+```{r}
+prc_geo %>% select(status_group, PC2) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 3
+
+```{r}
+prc_geo %>% select(status_group, PC3) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 4
+
+```{r}
+prc_geo %>% select(status_group, PC4) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+Again there is much separation of the status groups by geographical principal components.
+
+# Demographic PCA
+
+```{r}
+demographic_PCA <- PCA_variables %>% select(status_group, population, total_region_pop, households_per_region, mhead_avg_household_size_per_region, fhead_avg_household_size_per_region, region_pop_density)
+```
+
+```{r}
+pr_demo <- prcomp(x = select(demographic_PCA,-status_group), scale = T, center = T)
+summary(pr_demo)
+```
+
+```{r}
+screeplot(pr_demo, type = "lines")
+```
+
+```{r}
+pr_demo$rotation
+```
+
+```{r}
+ggbiplot(pr_demo, ellipse = TRUE, groups=train$status_group) + coord_equal(ratio=.85)
+```
+
+```{r}
+pca_demo_df <- rownames_to_column(as.data.frame(pr_demo$rotation)) %>%
+  select(1:5) %>%
+  filter(abs(PC1) >= 0.25 | abs(PC2) >= 0.25 | abs(PC3) >= 0.25 | abs(PC4) >= 0.25)
+
+pca_demo_df
+```
+
+```{r}
+save(pca_demo_df,file="pca_demo_df.Rda")
+#load("pca_demo_df.Rda")
+```
+
+```{r}
+# pc1_demo is highly populated wells, small region population and density
+# pc2_demo is less populated wells, slightly more populated region
+```
+
+# PC 1
+
+```{r}
+prc_demo <- bind_cols(select(train,status_group),as.data.frame(pr_demo$x))
+
+prc_demo %>% select(status_group, PC1) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 2
+
+```{r}
+prc_demo %>% select(status_group, PC2) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 3
+
+```{r}
+prc_demo %>% select(status_group, PC3) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 4
+
+```{r}
+prc_demo %>% select(status_group, PC4) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 5
+
+```{r}
+prc_demo %>% select(status_group, PC5) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 6
+
+```{r}
+prc_demo %>% select(status_group, PC6) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# Well characteristic PCA
+
+```{r}
+characteristics_PCA <- PCA_variables %>% select(status_group, construction_year, extraction_type_class_gravity, extraction_type_class_handpump, extraction_type_class_motorpump, extraction_type_class_other, `extraction_type_class_rope pump`, extraction_type_class_submersible, `extraction_type_class_wind-powered`, quality_group_colored, quality_group_fluoride, quality_group_good, quality_group_milky, quality_group_salty, quality_group_unknown, quantity_group_dry, quantity_group_enough, quantity_group_insufficient, quantity_group_seasonal, quantity_group_unknown, source_type_borehole, source_type_dam, source_type_other, `source_type_rainwater harvesting`, `source_type_river/lake`, `source_type_shallow well`, source_type_spring, source_class_groundwater, source_class_surface, source_class_unknown, `waterpoint_type_group_cattle trough`, `waterpoint_type_group_communal standpipe`, waterpoint_type_group_dam, `waterpoint_type_group_hand pump`, `waterpoint_type_group_improved spring`, waterpoint_type_group_other)
+```
+
+```{r}
+pr_chara <- prcomp(x = select(characteristics_PCA,-status_group), scale = T, center = T)
+summary(pr_chara)
+```
+
+```{r}
+screeplot(pr_chara, type = "lines")
+```
+
+```{r}
+pr_chara$rotation
+```
+
+```{r}
+ggbiplot(pr_chara, ellipse = TRUE, groups=train$status_group) + coord_equal(ratio=0.35)
+```
+
+```{r}
+pca_chara_df <- rownames_to_column(as.data.frame(pr_chara$rotation)) %>%
+  select(1:5) %>%
+  filter(abs(PC1) >= 0.25 | abs(PC2) >= 0.25 | abs(PC3) >= 0.25 | abs(PC4) >= 0.25)
+
+pca_chara_df
+```
+
+```{r}
+save(pca_chara_df,file="pca_chara_df.Rda")
+load("pca_chara_df.Rda")
+```
+
+```{r}
+# pc1_chara is handpump extraction method, poor water quality, and shallow groundwater wells
+# pc2_chara is other extraction method (not handpump, motorpump, and/or gravity), poor or unknown water quality, and surface or river/lake sourced wells 
+```
+
+# PC 1
+
+```{r}
+prc_chara <- bind_cols(select(train,status_group),as.data.frame(pr_chara$x))
+
+prc_chara %>% select(status_group, PC1) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 2
+
+```{r}
+prc_chara %>% select(status_group, PC2) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 3
+
+```{r}
+prc_chara %>% select(status_group, PC3) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 4
+
+```{r}
+prc_chara %>% select(status_group, PC4) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 5
+
+```{r}
+prc_chara %>% select(status_group, PC5) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# PC 6
+
+```{r}
+prc_chara %>% select(status_group, PC6) %>%
+  pivot_longer(cols = -status_group,names_to = "component",values_to = "loading") %>%
+  ggplot(aes(loading, fill = as.factor(status_group))) + geom_density(alpha=0.5)
+```
+
+# Selecting features to be used in modeling phase
+
+```{r}
+final_train <- train %>% select(status_group, amount_tsh, permit, literacy_rate_by_region, pct_unemployed_by_region, well_strain)
+
+final_train <- final_train %>% dummy_cols(., select_columns = c('permit'), remove_first_dummy = T, remove_selected_columns = T)
+
+final_prc_geo <- prc_geo %>% select(status_group, PC1, PC2) %>% transmute(status_group = status_group, med_lg_SE_region = PC1, small_med_NW_regions = PC2)
+
+final_prc_demo <- prc_demo %>% select(status_group, PC1, PC2) %>% transmute(status_group = status_group, dense_populated_wells = PC1, sparsely_pop_wells = PC2)
+
+final_prc_chara <- prc_chara %>% select(status_group, PC1, PC2) %>% transmute(status_group = status_group, handpump_groundwater_shallow_wells = PC1, other_extraction_from_rivers_lakes = PC2)
+```
+
+```{r}
+rm(characteristics_PCA, demographic_PCA, geographic_PCA, PCA_variables, pr_chara, pr_demo, pr_geo, pr_train, prc, prc_chara, prc_demo, prc_geo, train)
+```
+
+```{r}
+final_train <- rowid_to_column(final_train, 'X')
+final_prc_chara <- rowid_to_column(final_prc_chara, 'X')
+final_prc_demo <- rowid_to_column(final_prc_demo, 'X')
+final_prc_geo <- rowid_to_column(final_prc_geo, 'X')
+```
+
+```{r}
+final_train <- final_train %>% 
+  left_join(., final_prc_chara, by = 'X') %>% 
+  left_join(., final_prc_demo, by = 'X') %>%
+  left_join(., final_prc_geo, by = 'X') %>%
+  select(-X, -status_group.y, -status_group.x.x, -status_group.y.y) %>%
+  mutate(status_group = status_group.x) %>% 
+  select(-status_group.x)
+```
+
+```{r}
+write.csv(final_train, 'final_train.csv')
+```
+
+```{r}
+rm(final_prc_chara, final_prc_demo, final_prc_geo)
+```
+
